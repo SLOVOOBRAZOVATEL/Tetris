@@ -1,0 +1,756 @@
+#include "../brick_game/tetris/tetris.h"
+#include <check.h>
+
+#test test_initGameState
+Status_game *state = initGameState();
+ck_assert_ptr_nonnull(state);
+
+#test test_initGameInfo
+GameInfo_t *info = initGameInfo();
+ck_assert_ptr_nonnull(info);
+
+#test test_initGameParam
+Params_t *param = initGameParam();
+ck_assert_ptr_nonnull(param);
+
+#test test_initMatrix_basic
+{
+    int rows = 5;
+    int cols = 5;
+
+    int **matrix = initMatrix(rows, cols);
+    ck_assert_ptr_nonnull(matrix);
+
+    for (int i = 0; i < rows; i++) {
+        ck_assert_ptr_nonnull(matrix[i]);
+        for (int j = 0; j < cols; j++) {
+            ck_assert_int_eq(matrix[i][j], 0);
+        }
+    }
+
+    freeMatrix(matrix, rows);
+}
+
+#test test_freeMatrix_basic
+{
+    int rows = 5;
+    int cols = 5;
+    int **matrix = initMatrix(rows, cols);
+    ck_assert_ptr_nonnull(matrix);
+    for (int i = 0; i < rows; i++) {
+        ck_assert_ptr_nonnull(matrix[i]);
+    }
+    freeMatrix(matrix, rows);
+}
+
+#test test_copyPieceShape
+{
+    int src[BLOCK][BLOCK] = {
+        {1,0,0,0},
+        {0,1,0,0},
+        {0,0,1,0},
+        {0,0,0,1}
+    };
+    int dest[BLOCK][BLOCK] = {{0}};
+    copyPieceShape(dest, src);
+    for (int i = 0; i < BLOCK; i++) {
+        for (int j = 0; j < BLOCK; j++) {
+            ck_assert_int_eq(dest[i][j], src[i][j]);
+        }
+    }
+}
+
+#test test_canPlacePiece_valid_and_invalid_positions
+{
+    Params_t *param = initGameParam();
+    GameInfo_t *game_info = initGameInfo();
+    param->game_info = game_info;
+
+    int **field = initMatrix(FIELD_HEIGHT, FIELD_WIDTH);
+    param->game_info->field = field;
+
+    for (int i = 0; i < FIELD_HEIGHT; i++)
+        for (int j = 0; j < FIELD_WIDTH; j++)
+            field[i][j] = 0;
+
+    param->currentPiece.posX = 0;
+    param->currentPiece.posY = 0;
+    memset(param->currentPiece.shape, 0, sizeof(param->currentPiece.shape));
+    param->currentPiece.shape[0][0] = 1;
+
+    ck_assert_int_eq(canPlacePiece(param), 1);
+
+    param->currentPiece.posX = -1;
+    ck_assert_int_eq(canPlacePiece(param), 0);
+
+    param->currentPiece.posX = 0;
+    param->currentPiece.posY = FIELD_HEIGHT;
+    ck_assert_int_eq(canPlacePiece(param), 0);
+
+    param->currentPiece.posY = 0;
+    param->game_info->field[0][0] = 1;
+    ck_assert_int_eq(canPlacePiece(param), 0);
+
+    freeMatrix(field, FIELD_HEIGHT);
+}
+
+#test test_fixFigure_updates_field
+{
+    Params_t *param = initGameParam();
+    GameInfo_t *game_info = initGameInfo();
+    param->game_info = game_info;
+
+    int **field = initMatrix(FIELD_HEIGHT, FIELD_WIDTH);
+    param->game_info->field = field;
+
+    param->currentPiece.type = 2;
+    param->currentPiece.posX = 0;
+    param->currentPiece.posY = 0;
+    memset(param->currentPiece.shape, 0, sizeof(param->currentPiece.shape));
+    param->currentPiece.shape[0][0] = 1;
+
+    fixFigure(param);
+
+    ck_assert_int_eq(param->game_info->field[0][0], param->currentPiece.type + 1);
+
+    freeMatrix(field, FIELD_HEIGHT);
+}
+
+#test test_updateCurrentGameInfo_clears_lines_and_updates_score
+{
+    Params_t *param = initGameParam();
+    GameInfo_t *game_info = initGameInfo();
+    param->game_info = game_info;
+
+    int **field = initMatrix(FIELD_HEIGHT, FIELD_WIDTH);
+
+    for (int x = 0; x < FIELD_WIDTH; x++) {
+        field[FIELD_HEIGHT-1][x] = 1;
+        field[FIELD_HEIGHT-2][x] = 1;
+    }
+    param->game_info->field = field;
+
+    param->game_info->score = 0;
+    param->game_info->level = 1;
+    param->game_info->speed = 1000;
+
+    updateCurrentGameInfo(param);
+
+    for (int x = 0; x < FIELD_WIDTH; x++) {
+        ck_assert_int_eq(field[FIELD_HEIGHT-1][x], 0);
+        ck_assert_int_eq(field[FIELD_HEIGHT-2][x], 0);
+    }
+
+    ck_assert_int_ge(param->game_info->score, 200);
+
+    freeMatrix(field, FIELD_HEIGHT);
+}
+
+#test test_updateCurrentGameInfo_clears_lines_and_updates_score2
+{
+    Params_t *param = initGameParam();
+    GameInfo_t *game_info = initGameInfo();
+    param->game_info = game_info;
+
+    int **field = initMatrix(FIELD_HEIGHT, FIELD_WIDTH);
+
+    for (int x = 0; x < FIELD_WIDTH; x++) {
+        field[FIELD_HEIGHT-1][x] = 1;
+        field[FIELD_HEIGHT-2][x] = 1;
+        field[FIELD_HEIGHT-3][x] = 1;
+    }
+    param->game_info->field = field;
+
+    param->game_info->score = 0;
+    param->game_info->level = 1;
+    param->game_info->speed = 1000;
+
+    updateCurrentGameInfo(param);
+
+    for (int x = 0; x < FIELD_WIDTH; x++) {
+        ck_assert_int_eq(field[FIELD_HEIGHT-1][x], 0);
+        ck_assert_int_eq(field[FIELD_HEIGHT-2][x], 0);
+        ck_assert_int_eq(field[FIELD_HEIGHT-3][x], 0);
+    }
+
+    ck_assert_int_ge(param->game_info->score, 300);
+
+    freeMatrix(field, FIELD_HEIGHT);
+}
+
+#test test_updateCurrentGameInfo_clears_lines_and_updates_score1
+{
+    Params_t *param = initGameParam();
+    GameInfo_t *game_info = initGameInfo();
+    param->game_info = game_info;
+
+    int **field = initMatrix(FIELD_HEIGHT, FIELD_WIDTH);
+
+    for (int x = 0; x < FIELD_WIDTH; x++) {
+        field[FIELD_HEIGHT-1][x] = 1;
+    }
+    param->game_info->field = field;
+
+    param->game_info->score = 0;
+    param->game_info->level = 1;
+    param->game_info->speed = 1000;
+
+    updateCurrentGameInfo(param);
+
+    for (int x = 0; x < FIELD_WIDTH; x++) {
+        ck_assert_int_eq(field[FIELD_HEIGHT-1][x], 0);
+    }
+
+    ck_assert_int_ge(param->game_info->score, 100);
+
+    freeMatrix(field, FIELD_HEIGHT);
+}
+
+#test test_updateCurrentGameInfo_clears_lines_and_updates_score4
+{
+    Params_t *param = initGameParam();
+    GameInfo_t *game_info = initGameInfo();
+    param->game_info = game_info;
+
+    int **field = initMatrix(FIELD_HEIGHT, FIELD_WIDTH);
+
+    for (int x = 0; x < FIELD_WIDTH; x++) {
+        field[FIELD_HEIGHT-1][x] = 1;
+        field[FIELD_HEIGHT-2][x] = 1;
+        field[FIELD_HEIGHT-3][x] = 1;
+        field[FIELD_HEIGHT-4][x] = 1;
+    }
+    param->game_info->field = field;
+
+    param->game_info->score = 0;
+    param->game_info->level = 1;
+    param->game_info->speed = 1000;
+
+    updateCurrentGameInfo(param);
+
+    for (int x = 0; x < FIELD_WIDTH; x++) {
+        ck_assert_int_eq(field[FIELD_HEIGHT-1][x], 0);
+        ck_assert_int_eq(field[FIELD_HEIGHT-2][x], 0);
+        ck_assert_int_eq(field[FIELD_HEIGHT-3][x], 0);
+        ck_assert_int_eq(field[FIELD_HEIGHT-3][x], 0);
+    }
+
+    ck_assert_int_ge(param->game_info->score, 400);
+
+    freeMatrix(field, FIELD_HEIGHT);
+}
+
+#test test_canPlacePiece_safe_initialization
+{
+    Params_t *param = initGameParam();
+    GameInfo_t *game_info = initGameInfo();
+    param->game_info = game_info;
+
+    int **field = initMatrix(FIELD_HEIGHT, FIELD_WIDTH);
+    param->game_info->field = field;
+
+    for (int y = 0; y < FIELD_HEIGHT; y++)
+        for (int x = 0; x < FIELD_WIDTH; x++)
+            field[y][x] = 0;
+
+    param->currentPiece.posX = 0;
+    param->currentPiece.posY = 0;
+    for (int i = 0; i < BLOCK; i++)
+        for (int j = 0; j < BLOCK; j++)
+            param->currentPiece.shape[i][j] = 0;
+
+    param->currentPiece.shape[0][0] = 1;
+
+    int can_place = canPlacePiece(param);
+
+    ck_assert_int_eq(can_place, 1);
+
+    freeMatrix(field, FIELD_HEIGHT);
+}
+
+#test test_cleanStr_clears_row
+{
+    Params_t *param = initGameParam();
+    GameInfo_t *game_info = initGameInfo();
+    param->game_info = game_info;
+
+    int **field = initMatrix(FIELD_HEIGHT, FIELD_WIDTH);
+    param->game_info->field = field;
+
+    int y = 5;
+    for (int x = 0; x < FIELD_WIDTH; x++) {
+        field[y][x] = 1;
+    }
+
+    cleanStr(param, y);
+
+    for (int x = 0; x < FIELD_WIDTH; x++) {
+        ck_assert_int_eq(field[y][x], 0);
+    }
+
+    freeMatrix(field, FIELD_HEIGHT);
+}
+
+#test test_overlayCurrentPiece_overlays_piece_correctly
+{
+    Params_t *param = initGameParam();
+
+    param->currentPiece.type = 3;
+    param->currentPiece.posX = 0;
+    param->currentPiece.posY = 0;
+    memset(param->currentPiece.shape, 0, sizeof(param->currentPiece.shape));
+    param->currentPiece.shape[0][0] = 1;
+
+    int **fieldForFront = initMatrix(FIELD_HEIGHT, FIELD_WIDTH);
+    param->fieldForFront = fieldForFront;
+
+    for (int y = 0; y < FIELD_HEIGHT; y++)
+        for (int x = 0; x < FIELD_WIDTH; x++)
+            fieldForFront[y][x] = 0;
+
+    overlayCurrentPiece(param);
+
+    ck_assert_int_eq(fieldForFront[0][0], param->currentPiece.type + 1);
+
+    freeMatrix(fieldForFront, FIELD_HEIGHT);
+}
+
+#test test_moveFigureDown_can_move_and_blocked
+{
+    initGame();
+    Params_t *param = initGameParam(); // initGame() выделяет память и инициализирует поле и другие параметры
+    ck_assert_ptr_nonnull(param);
+    ck_assert_ptr_nonnull(param->game_info);
+
+    for (int y = 0; y < FIELD_HEIGHT; y++) {
+        for (int x = 0; x < FIELD_WIDTH; x++) {
+            param->game_info->field[y][x] = 0;
+        }
+    }
+
+    param->currentPiece.posX = 3;
+    param->currentPiece.posY = FIELD_HEIGHT - 3; // достаточно сверху, чтобы двигаться вниз
+    memset(param->currentPiece.shape, 0, sizeof(param->currentPiece.shape));
+    param->currentPiece.shape[0][0] = 1;
+
+    int can_move = moveFigureDown(param);
+    ck_assert_int_eq(can_move, 1);
+    ck_assert_int_eq(param->currentPiece.posY, FIELD_HEIGHT - 2);
+
+    param->game_info->field[FIELD_HEIGHT - 1][param->currentPiece.posX] = 1;
+
+    can_move = moveFigureDown(param);
+    ck_assert_int_eq(can_move, 0);
+    ck_assert_int_eq(param->currentPiece.posY, FIELD_HEIGHT - 2);
+}
+
+#test test_moveFigureLeft_can_move_and_blocked
+{
+    initGame();
+    Params_t *param = initGameParam();
+    ck_assert_ptr_nonnull(param);
+    ck_assert_ptr_nonnull(param->game_info);
+
+    for (int y = 0; y < FIELD_HEIGHT; y++) {
+        for (int x = 0; x < FIELD_WIDTH; x++) {
+            param->game_info->field[y][x] = 0;
+        }
+    }
+
+    param->currentPiece.posX = 1;
+    param->currentPiece.posY = 5;
+    memset(param->currentPiece.shape, 0, sizeof(param->currentPiece.shape));
+    param->currentPiece.shape[0][0] = 1;
+
+    int can_move = moveFigureLeft(param);
+    ck_assert_int_eq(can_move, 1);
+    ck_assert_int_eq(param->currentPiece.posX, 0);
+
+    param->game_info->field[5][0] = 1;
+
+    can_move = moveFigureLeft(param);
+    ck_assert_int_eq(can_move, 0);
+    ck_assert_int_eq(param->currentPiece.posX, 0);
+}
+
+#test test_moveFigureRight_can_move_and_blocked
+{
+    initGame();
+    Params_t *param = initGameParam();
+    ck_assert_ptr_nonnull(param);
+    ck_assert_ptr_nonnull(param->game_info);
+
+    for (int y = 0; y < FIELD_HEIGHT; y++) {
+        for (int x = 0; x < FIELD_WIDTH; x++) {
+            param->game_info->field[y][x] = 0;
+        }
+    }
+
+    param->currentPiece.posX = FIELD_WIDTH - 2;
+    param->currentPiece.posY = 5;
+    memset(param->currentPiece.shape, 0, sizeof(param->currentPiece.shape));
+    param->currentPiece.shape[0][0] = 1;
+
+    int can_move = moveFigureRight(param);
+    ck_assert_int_eq(can_move, 1);
+    ck_assert_int_eq(param->currentPiece.posX, FIELD_WIDTH - 1);
+
+    param->game_info->field[5][FIELD_WIDTH - 1] = 1;
+
+    can_move = moveFigureRight(param);
+    ck_assert_int_eq(can_move, 0);
+    ck_assert_int_eq(param->currentPiece.posX, FIELD_WIDTH - 1);
+}
+
+#test test_fixFigure_corrected
+{
+    initGame();
+    Params_t *param = initGameParam();
+    ck_assert_ptr_nonnull(param);
+    ck_assert_ptr_nonnull(param->game_info);
+    ck_assert_ptr_nonnull(param->game_info->field);
+
+    for (int i = 0; i < FIELD_HEIGHT; i++) {
+        for (int j = 0; j < FIELD_WIDTH; j++) {
+            param->game_info->field[i][j] = 0;
+        }
+    }
+
+    param->currentPiece.posX = 0;
+    param->currentPiece.posY = 0;
+    memset(param->currentPiece.shape, 0, sizeof(param->currentPiece.shape));
+    param->currentPiece.shape[0][0] = 1;
+    param->currentPiece.shape[0][1] = 1;
+    param->currentPiece.shape[1][0] = 1;
+    param->currentPiece.shape[1][1] = 1;
+    param->currentPiece.type = 2;
+
+    fixFigure(param);
+
+    for (int i = 0; i < 2; i++) {
+        for (int j = 0; j < 2; j++) {
+            ck_assert_int_eq(param->game_info->field[i][j], param->currentPiece.type + 1);
+        }
+    }
+}
+
+#test test_addHighScore
+{
+    remove("highscore.txt");
+
+    int oldHigh = getHighScore(); // теперь должно вернуть 0
+    int newHigh = oldHigh + 1;
+
+    int res = addHighScore(newHigh);
+    ck_assert_int_eq(res, 1);
+
+    int high = getHighScore();
+    ck_assert_int_eq(high, newHigh);
+
+    addHighScore(oldHigh);
+}
+
+#test test_cleanGame
+{
+    initGame();
+    cleanGame();
+    Params_t *param = initGameParam();
+    ck_assert_ptr_null(param->game_info->field);
+    ck_assert_ptr_null(param->game_info->next);
+    ck_assert_ptr_null(param->fieldForFront);
+}
+
+#test test_updateCurrentState_fixed
+{
+    initGame();
+    Status_game *state = initGameState();
+    Params_t *param = initGameParam();
+
+    param->start = 1;
+    param->game_info->pause = 0;
+
+    for (int i = 0; i < FIELD_HEIGHT; i++) {
+        for (int j = 0; j < FIELD_WIDTH; j++) {
+            param->game_info->field[i][j] = 0;
+            param->fieldForFront[i][j] = 0;
+        }
+    }
+
+    *state = Start_t;
+
+    GameInfo_t info = updateCurrentState();
+    ck_assert_int_eq(*state, Spawn);
+
+    info = updateCurrentState();
+    ck_assert_int_eq(*state, Moving);
+
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    param->drop_time = (struct timespec){ts.tv_sec - 10, ts.tv_nsec};
+    info = updateCurrentState();
+    ck_assert_int_eq(*state, Shifting);
+
+    for (int i = 0; i < FIELD_HEIGHT; i++) {
+        for (int j = 0; j < FIELD_WIDTH; j++) {
+            param->game_info->field[i][j] = 1;
+        }
+    }
+
+    info = updateCurrentState();
+    ck_assert_ptr_nonnull(info.field);
+    ck_assert_int_eq(*state, Attaching);
+
+    info = updateCurrentState();
+    ck_assert_int_eq(*state, Spawn);
+
+    for (int i = 0; i < FIELD_HEIGHT; i++) {
+        for (int j = 0; j < FIELD_WIDTH; j++) {
+            param->game_info->field[i][j] = 1;
+        }
+    }
+    *state = Spawn;
+    info = updateCurrentState();
+    ck_assert_int_eq(*state, GameOver);
+
+    *state = GameOver;
+    param->game_info->pause = 0;
+    info = updateCurrentState();
+    ck_assert_int_eq(param->game_info->pause, 2);
+}
+
+#test test_findMinXY
+{
+    int shape[BLOCK][BLOCK] = {{0}};
+    int minX = 0, minY = 0;
+
+    shape[1][2] = 1;
+    shape[1][3] = 1;
+    shape[2][2] = 1;
+    shape[3][1] = 1;
+
+    findMinXY(shape, &minX, &minY);
+
+    ck_assert_int_eq(minX, 1);
+    ck_assert_int_eq(minY, 1);
+}
+
+#test test_adjustPositionForLine
+{
+    initGame();
+    Params_t *param = initGameParam();
+    ck_assert_ptr_nonnull(param);
+
+    param->currentPiece.type = 0;
+
+    param->currentPiece.rotation = 0;
+    param->currentPiece.posX = 5;
+    param->currentPiece.posY = 5;
+    adjustPositionForLine(param);
+    ck_assert_int_eq(param->currentPiece.posX, 6);
+    ck_assert_int_eq(param->currentPiece.posY, 4);
+
+    param->currentPiece.rotation = 1;
+    param->currentPiece.posX = 5;
+    param->currentPiece.posY = 5;
+    adjustPositionForLine(param);
+    ck_assert_int_eq(param->currentPiece.posX, 4);
+    ck_assert_int_eq(param->currentPiece.posY, 6);
+
+    param->currentPiece.type = 1;
+    param->currentPiece.rotation = 0;
+    param->currentPiece.posX = 5;
+    param->currentPiece.posY = 5;
+    adjustPositionForLine(param);
+    ck_assert_int_eq(param->currentPiece.posX, 5);
+    ck_assert_int_eq(param->currentPiece.posY, 5);
+}
+
+#test test_rotateShape
+{
+int shape[BLOCK][BLOCK] = {{0}};
+int expected[BLOCK][BLOCK] = {{0}};
+
+shape[1][0] = 1;
+shape[1][1] = 1;
+shape[1][2] = 1;
+shape[1][3] = 1;
+
+expected[0][2] = 1;
+expected[1][2] = 1;
+expected[2][2] = 1;
+expected[3][2] = 1;
+
+rotateShape(shape);
+
+for (int i = 0; i < BLOCK; i++) {
+    for (int j = 0; j < BLOCK; j++) {
+        ck_assert_int_eq(shape[i][j], expected[i][j]);
+    }
+}
+}
+
+#test test_rotatePiece
+{
+    initGame();
+    Params_t *param = initGameParam();
+    ck_assert_ptr_nonnull(param);
+
+    param->currentPiece.type = 0;
+    param->currentPiece.rotation = 0;
+    param->currentPiece.posX = 5;
+    param->currentPiece.posY = 0;
+    param->currentPiece.shape[1][0] = 1;
+    param->currentPiece.shape[1][1] = 1;
+    param->currentPiece.shape[1][2] = 1;
+    param->currentPiece.shape[1][3] = 1;
+
+    int result = rotatePiece(param);
+
+    ck_assert_int_eq(result, 1);
+    ck_assert_int_eq(param->currentPiece.shape[0][2], 1);
+    ck_assert_int_eq(param->currentPiece.shape[1][2], 1);
+    ck_assert_int_eq(param->currentPiece.shape[2][2], 1);
+    ck_assert_int_eq(param->currentPiece.shape[3][2], 1);
+    ck_assert_int_ge(param->currentPiece.posX, 0);
+    ck_assert_int_ge(param->currentPiece.posY, 0);
+    ck_assert_int_eq(param->currentPiece.rotation, 1);
+}
+
+#test test_userInput_start
+{
+    initGame();
+    Params_t *param = initGameParam();
+    ck_assert_ptr_nonnull(param);
+Status_game *state = initGameState();
+*state = Start_t;
+param->start = false;
+
+UserAction_t action = Start;
+bool hold = false;
+userInput(action, hold);
+
+ck_assert_int_eq(*state, Spawn);
+ck_assert(param->start == true);
+}
+
+#test test_userInput_pause_from_moving
+{
+    initGame();
+    Params_t *param = initGameParam();
+    ck_assert_ptr_nonnull(param);
+Status_game *state = initGameState();
+*state = Moving;
+param->game_info->pause = 0;
+
+UserAction_t action = Pause;
+bool hold = false;
+userInput(action, hold);
+
+ck_assert_int_eq(*state, Pause_t);
+ck_assert_int_eq(param->game_info->pause, 1);
+}
+
+#test test_userInput_pause_from_pause
+{
+    initGame();
+    Params_t *param = initGameParam();
+    ck_assert_ptr_nonnull(param);
+Status_game *state = initGameState();
+*state = Pause_t;
+param->game_info->pause = 1;
+
+UserAction_t action = Pause;
+bool hold = false;
+userInput(action, hold);
+
+ck_assert_int_eq(*state, Moving);
+ck_assert_int_eq(param->game_info->pause, 0);
+}
+
+#test test_userInput_terminate
+{
+    initGame();
+    Params_t *param = initGameParam();
+    ck_assert_ptr_nonnull(param);
+Status_game *state = initGameState();
+*state = Moving;
+param->game_info->pause = 1;
+param->game_info->score = 1000;
+param->game_info->high_score = 500;
+
+UserAction_t action = Terminate;
+bool hold = false;
+userInput(action, hold);
+
+ck_assert_int_eq(*state, GameOver);
+ck_assert_int_eq(param->game_info->pause, 2);
+}
+
+#test test_userInput_left
+{
+    initGame();
+    Params_t *param = initGameParam();
+    ck_assert_ptr_nonnull(param);
+Status_game *state = initGameState();
+*state = Moving;
+param->game_info->pause = 0;
+param->currentPiece.posX = 5;
+
+UserAction_t action = Left;
+bool hold = false;
+userInput(action, hold);
+
+ck_assert_int_lt(param->currentPiece.posX, 5);
+}
+
+#test test_userInput_right
+{
+    initGame();
+    Params_t *param = initGameParam();
+    ck_assert_ptr_nonnull(param);
+Status_game *state = initGameState();
+*state = Moving;
+param->game_info->pause = 0;
+param->currentPiece.posX = 5;
+
+UserAction_t action = Right;
+bool hold = false;
+userInput(action, hold);
+
+ck_assert_int_gt(param->currentPiece.posX, 5);
+}
+
+#test test_userInput_action_rotate
+{
+    initGame();
+    Params_t *param = initGameParam();
+    ck_assert_ptr_nonnull(param);
+Status_game *state = initGameState();
+*state = Moving;
+param->game_info->pause = 0;
+param->currentPiece.rotation = 0;
+
+UserAction_t action = Action;
+bool hold = false;
+userInput(action, hold);
+
+ck_assert_int_eq(param->currentPiece.rotation, 1);
+}
+
+#test test_userInput_down
+{
+    initGame();
+    Params_t *param = initGameParam();
+    ck_assert_ptr_nonnull(param);
+Status_game *state = initGameState();
+*state = Moving;
+param->game_info->pause = 0;
+int initial_posY = param->currentPiece.posY; 
+
+UserAction_t action = Down;
+bool hold = false;
+userInput(action, hold);
+
+ck_assert_int_eq(param->currentPiece.posY, initial_posY);
+ck_assert_int_eq(*state, Moving);  
+}
